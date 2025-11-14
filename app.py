@@ -17,6 +17,10 @@ db = SQLAlchemy(app)
 # ==========================
 # DATABASE MODELS
 # ==========================
+band_album = db.Table('band_album',
+    db.Column('band_id', db.Integer, db.ForeignKey('bands.BandID'), primary_key=True),
+    db.Column('album_id', db.Integer, db.ForeignKey('albums.AlbumID'), primary_key=True)
+)
 
 
 class Bands(db.Model):
@@ -27,15 +31,14 @@ class Bands(db.Model):
     # Relationship: One band has many members + albums
     # members = db.relationship('Members', backref='band', lazy=True)
     memberships = db.relationship('Memberships', backref='band', lazy=True)
-    albums = db.relationship('Albums', backref='band', lazy=True)
-
+    albums = db.relationship('Albums', secondary=band_album, back_populates='bands')
 
 class Members(db.Model):
     MemberID = db.Column(db.Integer, primary_key=True)
     # BandID = db.Column(db.Integer, db.ForeignKey('bands.BandID'), nullable=False)
     MemberName = db.Column(db.String(80), nullable=False)
     MainPosition = db.Column(db.String(80))
-    memberships = db.relationship('Memberships', backref='member', lazy=True)
+    Memberships = db.relationship('Memberships', backref='member', lazy=True)
 
 
 class Memberships(db.Model):
@@ -51,8 +54,8 @@ class Memberships(db.Model):
 
 class Albums(db.Model):
     AlbumID = db.Column(db.Integer, primary_key=True)
-    BandID = db.Column(db.Integer, db.ForeignKey(
-        'bands.BandID'), nullable=False)
+    bands = db.relationship('Bands', 
+        secondary=band_album, back_populates='albums')
     AlbumTitle = db.Column(db.String(80), nullable=False)
     ReleaseYear = db.Column(db.Integer)
 
@@ -99,15 +102,21 @@ def add_member():
 def add_album():
     bands = Bands.query.all()
     if request.method == 'POST':
+        selected_band_ids = request.form.getlist('bands')
         new_album = Albums(
             AlbumTitle=request.form['albumtitle'],
-            ReleaseYear=request.form['releaseyear'],
-            BandID=request.form['bandid']
+            ReleaseYear=request.form['releaseyear']
         )
+        for band_id in selected_band_ids:
+            band = Bands.query.get(int(band_id))
+            if band:
+                new_album.bands.append(band)
+
         db.session.add(new_album)
         db.session.commit()
         return redirect(url_for('index'))
     return render_template('add_album.html', bands=bands)
+
 
 
 @app.route('/bands/view')
